@@ -913,7 +913,7 @@ status_t PolicySerializer::deserialize(const char *configFile, AudioPolicyConfig
     if (status != NO_ERROR) {
         return status;
     }
-    +
+    
    // Remove modules called bluetooth, bluetooth_qti or a2dp, and inject our own
     if (property_get_bool("persist.bluetooth.system_audio_hal.enabled", false)) {
 	    for (auto it = modules.begin(); it != modules.end(); it++) {
