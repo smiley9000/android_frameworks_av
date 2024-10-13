@@ -26,6 +26,7 @@
 #include <libxml/xinclude.h>
 #include <media/convert.h>
 #include <utils/Log.h>
+#include <system/audio.h>
 #include <utils/StrongPointer.h>
 #include <utils/Errors.h>
 #include <utils/RefBase.h>
@@ -333,11 +334,8 @@ status_t PolicySerializer::deserializeCollection(const xmlNode *cur,
                             Trait::collectionTag);
                         return status;
                     }
-                } else if (mIgnoreVendorExtensions && std::get<status_t>(maybeElement) == NO_INIT) {
-                    // Skip a vendor extension element.
-                } else {
-                    return BAD_VALUE;
                 }
+                // Ignore elements that failed to parse, e.g. routes with invalid sinks
             }
         }
         if (!xmlStrcmp(cur->name, reinterpret_cast<const xmlChar*>(Trait::tag))) {
@@ -706,6 +704,25 @@ std::variant<status_t, ModuleTraits::Element> PolicySerializer::deserialize<Modu
     status = deserializeCollection<DevicePortTraits>(cur, &devicePorts, NULL);
     if (status != NO_ERROR) {
         return status;
+    }
+    bool shouldEraseA2DP = name == "primary" && property_get_bool("persist.bluetooth.system_audio_hal.enabled", false);
+    if (shouldEraseA2DP) {
+        // Having A2DP ports in the primary audio HAL module will interfere with sysbta
+        // so remove them here. Note that we do not need to explicitly remove the
+        // corresponding routes below, because routes with invalid sinks will be ignored
+        auto iter = devicePorts.begin();
+        while (iter != devicePorts.end()) {
+            auto port = *iter;
+            auto type = port->type();
+            if (type == AUDIO_DEVICE_OUT_BLUETOOTH_A2DP
+                    || type == AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES
+                    || type == AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_SPEAKER) {
+                ALOGE("Erasing A2DP device port %s", port->getTagName().c_str());
+                iter = devicePorts.erase(iter);
+            } else {
+                iter++;
+            }
+        }
     }
     module->setDeclaredDevices(devicePorts);
 
